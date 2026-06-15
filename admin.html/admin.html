@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EV Rentals Command Center</title>
+    <script>
+        // Apply theme immediately to prevent flashing
+        if(localStorage.getItem('ev_theme') === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        
+        // Initial SSR Data injection
+        window.INITIAL_DASHBOARD = <?!= typeof initialDashboard !== 'undefined' ? initialDashboard : 'null' ?>;
+        window.INITIAL_BOOKINGS = <?!= typeof initialBookings !== 'undefined' ? initialBookings : 'null' ?>;
+        window.INITIAL_INVENTORY = <?!= typeof initialInventory !== 'undefined' ? initialInventory : 'null' ?>;
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #d97706;
+            --primary-hover: #b45309;
+            --bg-color: #f5f5f7;
+            --card-bg: rgba(255, 255, 255, 0.65);
+            --nav-bg: rgba(255, 255, 255, 0.8);
+            --text-main: #1d1d1f;
+            --text-muted: #86868b;
+            --border: rgba(0, 0, 0, 0.08);
+            --success: #34c759;
+            --danger: #ff3b30;
+            --warning: #ff9500;
+            --glass-blur: blur(24px);
+            --shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+            --radius-lg: 20px;
+            --radius-md: 16px;
+            --radius-sm: 12px;
+        }
+
+        [data-theme="dark"] {
+            --primary: #ea580c;
+            --primary-hover: #c2410c;
+            --bg-color: #000000;
+            --card-bg: rgba(28, 28, 30, 0.65);
+            --nav-bg: rgba(28, 28, 30, 0.8);
+            --text-main: #f5f5f7;
+            --text-muted: #86868b;
+            --border: rgba(255, 255, 255, 0.08);
+            --success: #32d74b;
+            --danger: #ff453a;
+            --warning: #ffd60a;
+            --shadow: 0 10px 40px rgba(255, 255, 255, 0.03);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 85% 15%, rgba(217, 119, 6, 0.08), transparent 35%), 
+                              radial-gradient(circle at 15% 85%, rgba(52, 199, 89, 0.05), transparent 35%);
+            background-attachment: fixed;
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        nav {
+            background-color: var(--nav-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            padding: 1.2rem 2.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            letter-spacing: -0.02em;
+        }
+
+        .logo svg { color: var(--primary); }
+
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-link {
+            padding: 0.6rem 1.2rem;
+            cursor: pointer;
+            font-weight: 500;
+            color: var(--text-muted);
+            border-radius: 999px;
+            transition: all 0.3s ease;
+            font-size: 0.95rem;
+        }
+
+        .nav-link:hover {
+            color: var(--text-main);
+            background-color: rgba(0,0,0,0.04);
+        }
+
+        [data-theme="dark"] .nav-link:hover {
+            background-color: rgba(255,255,255,0.06);
+        }
+
+        .nav-link.active {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: var(--text-main);
+            transition: transform 0.2s ease;
+        }
+        
+        .theme-toggle:hover { transform: scale(1.1); }
+
+        .container {
+            max-width: 1200px;
+            margin: 3rem auto;
+            padding: 0 1.5rem;
+        }
+
+        .section {
+            display: none;
+            animation: slideUp 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .grid-4 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            padding: 2rem;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 15px 50px rgba(0,0,0,0.08);
+        }
+
+        .card-title {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .card-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-main);
+            letter-spacing: -0.04em;
+        }
+
+        .table-container {
+            background: var(--card-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            margin-bottom: 2.5rem;
+        }
+
+        .table-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-header h2 {
+            margin: 0;
+            color: var(--text-main);
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            font-size: 1.4rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 1.2rem 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        tr:last-child td { border-bottom: none; }
+
+        th {
+            background-color: rgba(0, 0, 0, 0.02);
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+        }
+        
+        [data-theme="dark"] th { background-color: rgba(255, 255, 255, 0.02); }
+
+        tbody tr {
+            transition: background-color 0.2s ease;
+        }
+        
+        tbody tr:hover {
+            background-color: rgba(0,0,0,0.02);
+        }
+        
+        [data-theme="dark"] tbody tr:hover { background-color: rgba(255,255,255,0.03); }
+
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 999px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            font-size: 0.9rem;
+        }
+
+        .btn:hover { 
+            background-color: var(--primary-hover); 
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+        }
+        .btn-success { background-color: var(--success); }
+        .btn-success:hover { background-color: #2ebc4f; box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3); }
+        .btn-danger { background-color: var(--danger); }
+        .btn-danger:hover { background-color: #e0352b; box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3); }
+        .btn-outline { background-color: transparent; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-outline:hover { background-color: var(--border); box-shadow: none; color: var(--text-main); }
+
+        .badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .badge.pending { background-color: rgba(255, 149, 0, 0.1); color: var(--warning); }
+        .badge.rented { background-color: rgba(217, 119, 6, 0.1); color: var(--primary); }
+        .badge.available { background-color: rgba(52, 199, 89, 0.1); color: var(--success); }
+
+        /* Inventory Grid */
+        .inventory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .bike-card {
+            background: var(--card-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .bike-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow);
+        }
+
+        .bike-card.rented { border-top: 4px solid var(--danger); }
+        .bike-card.available { border-top: 4px solid var(--success); }
+
+        .bike-icon {
+            margin-bottom: 1.2rem;
+            color: var(--text-main);
+            opacity: 0.8;
+        }
+
+        .bike-id {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--text-main);
+            letter-spacing: -0.02em;
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); 
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: none;
+            justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal.active { display: flex; animation: fadeIn 0.3s; }
+        .modal-content {
+            background: var(--card-bg); padding: 2.5rem;
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius-lg); width: 90%; max-width: 500px;
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            animation: slideUp 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .form-group {
+            display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem;
+        }
+        .form-group label { font-weight: 500; color: var(--text-muted); font-size: 0.9rem; margin-left: 0.2rem; }
+        .form-group select, .form-group input {
+            width: 100%;
+            padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+            background: rgba(255, 255, 255, 0.4); color: var(--text-main); font-size: 1rem;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+        
+        [data-theme="dark"] .form-group select, [data-theme="dark"] .form-group input {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none; border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
+            background-color: transparent;
+        }
+
+        select {
+            appearance: none;
+            text-align: center;
+            text-align-last: center;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2386868b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            padding-right: 2.5rem;
+        }
+
+        /* Loader */
+        .loader-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.2); 
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            display: none;
+            justify-content: center; align-items: center; z-index: 2000;
+        }
+        .loader-overlay.active { display: flex; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(0,0,0,0.1); border-top-color: var(--primary);
+            border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        [data-theme="dark"] .spinner { border-color: rgba(255,255,255,0.1); border-top-color: var(--primary); }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Accordion */
+        .accordion {
+            background-color: transparent;
+            color: var(--text-main);
+            cursor: pointer;
+            padding: 1.2rem;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            text-align: left;
+            outline: none;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: 0.3s;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .accordion.active, .accordion:hover {
+            background-color: rgba(0,0,0,0.02);
+        }
+        [data-theme="dark"] .accordion.active, [data-theme="dark"] .accordion:hover {
+            background-color: rgba(255,255,255,0.04);
+        }
+        .accordion::after {
+            content: '+';
+            font-size: 1.5rem;
+            color: var(--text-muted);
+        }
+        .accordion.active::after {
+            content: '-';
+        }
+        .panel {
+            padding: 0;
+            background-color: transparent;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            margin-bottom: 1rem;
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+        }
+    </style>
+</head>
+<body>
+
+    <svg width="0" height="0" style="display:none;">
+        <defs>
+            <g id="icon-bike">
+                <circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h2"/>
+            </g>
+        </defs>
+    </svg>
+
+    <!-- Removed loader for instant UI -->
+
+    <nav>
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-bike"/></svg>
+            EV Rentals Pro
+        </div>
+        <div class="nav-links">
+            <div class="nav-link active" onclick="showSection('dashboard')">Active Bookings</div>
+            <div class="nav-link" onclick="showSection('bookings')">All Bookings</div>
+            <div class="nav-link" onclick="showSection('inventory')">EV Fleet</div>
+            <div class="nav-link" onclick="showSection('settings')">System Settings</div>
+            <div class="nav-link" onclick="showSection('reports')">Reports</div>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">
+            <svg id="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+        </button>
+    </nav>
+
+    <div class="container">
+        
+        <!-- Dashboard Section -->
+        <div id="dashboard" class="section active">
+            <!-- New Pending Allocations -->
+            <div class="table-container" style="margin-bottom: 2rem;">
+                <div class="table-header">
+                    <h2><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: bottom; margin-right: 0.5rem;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg> Pending Allocations</h2>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Booking ID</th>
+                                <th>Guest</th>
+                                <th>Cottage</th>
+                                <th>Rent Amount</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dash-pending-tbody">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Active Bookings -->
+            <div class="table-container">
+                <div class="table-header">
+                    <h2><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: bottom; margin-right: 0.5rem;"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg> Active Bookings</h2>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Booking ID</th>
+                                <th>Guest Info</th>
+                                <th>Cottage</th>
+                                <th>Scooter</th>
+                                <th>Exp. Return</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dash-active-tbody">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Bookings Section -->
+        <div id="bookings" class="section">
+            <div class="table-container">
+                <div class="table-header">
+                    <h2>All Bookings</h2>
+                </div>
+                <div style="padding: 1.5rem;" id="all-bookings-container">
+                    <!-- Populated via JS with Accordions -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory Section -->
+        <div id="inventory" class="section">
+            <div class="table-container" style="background: transparent; border: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; overflow: visible;">
+                <div class="table-header" style="background: var(--card-bg); border-radius: var(--radius-lg); margin-bottom: 2rem; border: 1px solid var(--border);">
+                    <h2>EV Fleet Status</h2>
+                </div>
+                <div class="inventory-grid" id="inventory-grid">
+                    <!-- Cards Populated via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Section -->
+        <div id="settings" class="section">
+            <div class="table-container">
+                <div class="table-header">
+                    <h2>System Settings</h2>
+                </div>
+                <div style="padding: 2.5rem; display: grid; gap: 1.5rem;">
+                    <div class="form-group">
+                        <label>Google Spreadsheet ID</label>
+                        <input type="text" id="set_sid" placeholder="Leave empty to create a new database sheet on update">
+                    </div>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;">
+                        <button class="btn" onclick="saveSettings()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 0.3rem;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Settings</button>
+                        <button class="btn btn-success" onclick="updateDatabaseSheet()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 0.3rem;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg> Update Database</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reports Section -->
+        <div id="reports" class="section">
+            <div class="table-container">
+                <div class="table-header">
+                    <h2>Reports</h2>
+                </div>
+                <div style="padding: 2.5rem; display: grid; gap: 1.5rem;">
+                    <p style="color: var(--text-muted); margin-bottom: 1rem;">Detailed reports section coming soon...</p>
+                    <div class="form-group">
+                        <label>Daily Report Email Address</label>
+                        <input type="email" id="set_email" placeholder="admin@example.com">
+                    </div>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;">
+                        <button class="btn" onclick="saveSettings()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 0.3rem;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Save Settings</button>
+                        <button class="btn btn-outline" onclick="sendManualReport()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 0.3rem;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg> Send Report Now</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Allocate Modal -->
+    <div class="modal" id="allocateModal">
+        <div class="modal-content">
+            <h2 style="margin-top:0; color:var(--text-main); font-weight: 600; letter-spacing: -0.02em;">Allocate EV Bike</h2>
+            <p id="alloc-booking-info" style="color: var(--text-muted); margin-bottom: 2rem; font-size: 0.95rem;"></p>
+            
+            <div class="form-group">
+                <label>Select Available Bike</label>
+                <select id="alloc-scooter"></select>
+            </div>
+
+            <div style="margin: 2rem 0; font-weight: 500; color: var(--text-main);">
+                <label style="display: flex; align-items: center; gap: 0.8rem; cursor: pointer;">
+                    <input type="checkbox" id="alloc-cash" style="width: 22px; height: 22px; accent-color: var(--primary); border-radius: 6px;">
+                    I have collected the Cash (Rent + ₹2000 Deposit)
+                </label>
+            </div>
+
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                <button class="btn btn-outline" onclick="closeModal('allocateModal')">Cancel</button>
+                <button class="btn" onclick="confirmAllocation()">Confirm & Allocate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Return Modal -->
+    <div class="modal" id="returnModal">
+        <div class="modal-content">
+            <h2 style="margin-top:0; color:var(--text-main); font-weight: 600; letter-spacing: -0.02em;">Process Return</h2>
+            <p id="return-scooter-id" style="color: var(--text-muted); margin-bottom: 2rem; font-size: 0.95rem;"></p>
+            
+            <div class="form-group">
+                <label>Vehicle Condition</label>
+                <select id="r_condition">
+                    <option value="Good">Good (No Damage)</option>
+                    <option value="Damaged">Damaged / Water Damage</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Late Fee (₹)</label>
+                <input type="number" id="r_late" value="0">
+            </div>
+            
+            <div class="form-group">
+                <label>Deposit Refunded (₹)</label>
+                <input type="number" id="r_refund" value="2000">
+            </div>
+
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                <button class="btn btn-outline" onclick="closeModal('returnModal')">Cancel</button>
+                <button class="btn" onclick="submitReturn()">Complete Return</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Setup API
+        const isGas = typeof google !== 'undefined' && google.script;
+        function callBackend(funcName, ...args) {
+            return new Promise((resolve, reject) => {
+                if (isGas) {
+                    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[funcName](...args);
+                } else {
+                    console.warn("MOCK API: " + funcName);
+                    setTimeout(() => {
+                        const bookings = JSON.parse(localStorage.getItem('ev_mock_bookings') || '[]');
+                        
+                        if (funcName === 'getDashboardData') {
+                            let held = 0;
+                            bookings.forEach(b => { if(b.status === 'Pending') held += b.securityDeposit; });
+                            resolve({ available: 4, rented: 0, todayProfit: 0, todayCashInHand: 0, depositsHeld: held, returnsToday: 0, upcomingReturns: [] });
+                        } else if (funcName === 'getActiveRentals') {
+                            let pAlloc = [], rnt = [];
+                            bookings.forEach((b, i) => {
+                                if (b.status === 'Pending') {
+                                    const obj = { rowIdx: i+2, bookingId: b.bookingId, name: b.name, phone: b.phone, area: b.area, expReturn: b.expReturn, rentAmount: b.rentAmount, securityDeposit: b.securityDeposit, scooterId: b.scooterId || 'Pending Allocation' };
+                                    if(obj.scooterId === 'Pending Allocation') pAlloc.push(obj); else rnt.push(obj);
+                                }
+                            });
+                            resolve({ rentals: rnt, pendingAllocations: pAlloc });
+                        } else if (funcName === 'getAllScooters') {
+                            resolve([{id: 'S-001', status: 'Available'}, {id: 'S-002', status: 'Available'}, {id: 'S-003', status: 'Available'}]);
+                        } else if (funcName === 'getAvailableScooters') {
+                            resolve(['S-001', 'S-002', 'S-003']);
+                        } else if (funcName === 'allocateBike') {
+                            const data = args[0];
+                            const idx = bookings.findIndex(b => b.bookingId === data.bookingId);
+                            if(idx > -1) { 
+                                bookings[idx].scooterId = data.scooterId; 
+                                localStorage.setItem('ev_mock_bookings', JSON.stringify(bookings)); 
+                            }
+                            resolve({success: true});
+                        } else if (funcName === 'getSettings') {
+                            resolve({ spreadsheetId: 'LOCAL_TESTING_MODE_NO_ID_NEEDED', reportEmail: 'local@test.com' });
+                        } else if (funcName === 'saveSettings') {
+                            resolve({success: true});
+                        } else if (funcName === 'updateSheet') {
+                            resolve({success: true, message: "Mock Database updated!", newId: "MOCK_LOCAL_ID"});
+                        } else if (funcName === 'sendDailyReport') {
+                            resolve("Mock Report sent successfully!");
+                        } else {
+                            resolve();
+                        }
+                    }, 500);
+                }
+            });
+        }
+
+        function escapeHTML(str) {
+            return str ? str.toString().replace(/[&<>'"]/g, tag => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[tag])) : '';
+        }
+
+        function showLoader() { }
+        function hideLoader() { }
+
+        // Navigation
+        function showSection(id) {
+            document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            document.querySelector(`[onclick="showSection('${id}')"]`).classList.add('active');
+
+            if(id === 'dashboard') loadDashboard();
+            if(id === 'bookings') loadBookings();
+            if(id === 'inventory') loadInventory();
+            if(id === 'settings' || id === 'reports') loadSettings();
+        }
+
+        window.onload = () => loadDashboard();
+
+        // --- Dashboard ---
+        function renderDashboard(res) {
+            if(!res) return;
+            // Pending Allocations
+            const pTbody = document.getElementById('dash-pending-tbody');
+            let pHTML = '';
+            if(!res.pendingAllocations || res.pendingAllocations.length === 0) {
+                pHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No new requests.</td></tr>`;
+            } else {
+                res.pendingAllocations.forEach(p => {
+                    pHTML += `<tr>
+                        <td><strong>${escapeHTML(p.bookingId)}</strong></td>
+                        <td>${escapeHTML(p.name)}<br><small style="color: var(--text-muted);">${escapeHTML(p.phone)}</small></td>
+                        <td><span class="badge pending">${escapeHTML(p.area)}</span></td>
+                        <td>₹${p.rentAmount + p.securityDeposit} <small style="color: var(--text-muted);">(incl. dep)</small></td>
+                        <td><button class="btn btn-success" onclick="openAllocateModal('${escapeHTML(p.bookingId)}', '${escapeHTML(p.name)}', ${p.rentAmount + p.securityDeposit})">Allocate Bike</button></td>
+                    </tr>`;
+                });
+            }
+            pTbody.innerHTML = pHTML;
+
+            // Active Bookings in Dashboard
+            const aTbody = document.getElementById('dash-active-tbody');
+            if(!res.rentals || res.rentals.length === 0) {
+                aTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No active bookings</td></tr>`;
+            } else {
+                let aHTML = '';
+                res.rentals.forEach(r => {
+                    aHTML += `<tr>
+                        <td><strong>${escapeHTML(r.bookingId)}</strong></td>
+                        <td>${escapeHTML(r.name)}<br><small style="color: var(--text-muted);">${escapeHTML(r.phone)}</small></td>
+                        <td>${escapeHTML(r.area)}</td>
+                        <td><span class="badge rented">${escapeHTML(r.scooterId)}</span></td>
+                        <td>${new Date(r.expReturn).toLocaleDateString()}</td>
+                        <td><button class="btn btn-danger" onclick="openReturnModal('${escapeHTML(r.bookingId)}', '${escapeHTML(r.scooterId)}')">Process Return</button></td>
+                    </tr>`;
+                });
+                aTbody.innerHTML = aHTML;
+            }
+        }
+
+        function loadDashboard() {
+            showLoader();
+            const cached = localStorage.getItem('ev_cache_dashboard');
+            
+            if(window.INITIAL_DASHBOARD && Object.keys(window.INITIAL_DASHBOARD).length > 0) {
+                renderDashboard(window.INITIAL_DASHBOARD);
+                localStorage.setItem('ev_cache_dashboard', JSON.stringify(window.INITIAL_DASHBOARD));
+                window.INITIAL_DASHBOARD = null; // consume it
+                hideLoader();
+            } else if(cached) { 
+                try { renderDashboard(JSON.parse(cached)); } catch(e) {} 
+                callBackend('getActiveRentals').then(res => {
+                    hideLoader();
+                    if(res) {
+                        localStorage.setItem('ev_cache_dashboard', JSON.stringify(res));
+                        renderDashboard(res);
+                    }
+                });
+            } else {
+                callBackend('getActiveRentals').then(res => {
+                    hideLoader();
+                    if(res) {
+                        localStorage.setItem('ev_cache_dashboard', JSON.stringify(res));
+                        renderDashboard(res);
+                    }
+                });
+            }
+        }
+
+        // --- Allocation Modal ---
+        let currentAllocBooking = null;
+        function openAllocateModal(bookingId, name, totalDue) {
+            currentAllocBooking = bookingId;
+            document.getElementById('alloc-booking-info').innerText = `Guest: ${name} | Total Cash Due: ₹${totalDue}`;
+            document.getElementById('alloc-cash').checked = false;
+            
+            showLoader();
+            callBackend('getAvailableScooters').then(scooters => {
+                hideLoader();
+                const select = document.getElementById('alloc-scooter');
+                select.innerHTML = '<option value="">-- Select Available Bike --</option>';
+                if(scooters) {
+                    scooters.forEach(s => {
+                        select.innerHTML += `<option value="${s}">${s}</option>`;
+                    });
+                }
+                document.getElementById('allocateModal').classList.add('active');
+            });
+        }
+
+        function confirmAllocation() {
+            const scooter = document.getElementById('alloc-scooter').value;
+            const cashChecked = document.getElementById('alloc-cash').checked;
+            
+            if(!scooter) { alert("Please select a bike to allocate!"); return; }
+            if(!cashChecked) { alert("You must collect the cash before allocating the bike!"); return; }
+
+            showLoader();
+            callBackend('allocateBike', { bookingId: currentAllocBooking, scooterId: scooter }).then(res => {
+                hideLoader();
+                if(res && res.success) {
+                    closeModal('allocateModal');
+                    loadDashboard();
+                } else {
+                    alert("Error: " + (res ? res.error : "Unknown error"));
+                }
+            });
+        }
+
+        // --- All Bookings ---
+        function renderBookings(res) {
+            const container = document.getElementById('all-bookings-container');
+            if(!res || res.length === 0) {
+                container.innerHTML = `<p style="text-align: center; color: var(--text-muted);">No bookings found</p>`;
+                return;
+            }
+            
+            // Group by date
+            const grouped = {};
+            res.forEach(b => {
+                const dateStr = new Date(b.bookDate).toLocaleDateString();
+                if(!grouped[dateStr]) grouped[dateStr] = [];
+                grouped[dateStr].push(b);
+            });
+
+            let html = '';
+            for(const date in grouped) {
+                html += `<button class="accordion">${date} (${grouped[date].length} Bookings)</button>
+                <div class="panel">
+                    <div style="overflow-x: auto;">
+                        <table style="margin-top: 0;">
+                            <thead>
+                                <tr>
+                                    <th>Booking ID</th>
+                                    <th>Guest</th>
+                                    <th>Scooter</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+                grouped[date].forEach(r => {
+                    let actionBtn = r.status === 'Pending' && r.scooterId !== 'Pending Allocation' ? 
+                        `<button class="btn btn-danger" onclick="openReturnModal('${escapeHTML(r.bookingId)}', '${escapeHTML(r.scooterId)}')">Return</button>` : 
+                        (r.status === 'Pending' ? `<button class="btn btn-success" onclick="openAllocateModal('${escapeHTML(r.bookingId)}', '${escapeHTML(r.name)}', ${r.rentAmount + r.securityDeposit})">Allocate</button>` : '-');
+                    
+                    let badgeClass = r.status === 'Returned' ? 'available' : (r.status === 'Pending' && r.scooterId === 'Pending Allocation' ? 'pending' : 'rented');
+
+                    html += `<tr>
+                        <td><strong>${escapeHTML(r.bookingId)}</strong></td>
+                        <td>${escapeHTML(r.name)}<br><small style="color: var(--text-muted);">${escapeHTML(r.phone)}</small></td>
+                        <td><span class="badge ${badgeClass}">${escapeHTML(r.scooterId)}</span></td>
+                        <td><span class="badge ${badgeClass}">${escapeHTML(r.status)}</span></td>
+                        <td>${actionBtn}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table></div></div>`;
+            }
+            container.innerHTML = html;
+
+            // Add accordion event listeners
+            const acc = document.getElementsByClassName("accordion");
+            for (let i = 0; i < acc.length; i++) {
+                acc[i].addEventListener("click", function() {
+                    this.classList.toggle("active");
+                    const panel = this.nextElementSibling;
+                    if (panel.style.maxHeight) {
+                        panel.style.maxHeight = null;
+                    } else {
+                        panel.style.maxHeight = panel.scrollHeight + "px";
+                    } 
+                });
+            }
+        }
+
+        function loadBookings() {
+            showLoader();
+            const cached = localStorage.getItem('ev_cache_bookings');
+            
+            if(window.INITIAL_BOOKINGS && window.INITIAL_BOOKINGS.length > 0) {
+                renderBookings(window.INITIAL_BOOKINGS);
+                localStorage.setItem('ev_cache_bookings', JSON.stringify(window.INITIAL_BOOKINGS));
+                window.INITIAL_BOOKINGS = null;
+                hideLoader();
+            } else if(cached) { 
+                try { renderBookings(JSON.parse(cached)); } catch(e) {} 
+                callBackend('getAllBookings').then(res => {
+                    hideLoader();
+                    if(res) {
+                        localStorage.setItem('ev_cache_bookings', JSON.stringify(res));
+                        renderBookings(res);
+                    }
+                });
+            } else {
+                callBackend('getAllBookings').then(res => {
+                    hideLoader();
+                    if(res) {
+                        localStorage.setItem('ev_cache_bookings', JSON.stringify(res));
+                        renderBookings(res);
+                    }
+                });
+            }
+        }
+
+        // --- Inventory Visuals ---
+        function renderInventory(scooters) {
+            const grid = document.getElementById('inventory-grid');
+            let gridHTML = '';
+            if(scooters) {
+                scooters.forEach(s => {
+                    const isAvail = s.status === 'Available';
+                    gridHTML += `
+                        <div class="bike-card ${isAvail ? 'available' : 'rented'}">
+                            <div class="bike-icon">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><use href="#icon-bike"/></svg>
+                            </div>
+                            <div class="bike-id">${escapeHTML(s.id)}</div>
+                            <span class="badge ${isAvail ? 'available' : 'rented'}" style="margin-top: 1rem; display: inline-block;">${escapeHTML(s.status)}</span>
+                        </div>
+                    `;
+                });
+            }
+            grid.innerHTML = gridHTML;
+        }
+
+        function loadInventory() {
+            showLoader();
+            const cached = localStorage.getItem('ev_cache_inventory');
+            
+            if(window.INITIAL_INVENTORY && window.INITIAL_INVENTORY.length > 0) {
+                renderInventory(window.INITIAL_INVENTORY);
+                localStorage.setItem('ev_cache_inventory', JSON.stringify(window.INITIAL_INVENTORY));
+                window.INITIAL_INVENTORY = null;
+                hideLoader();
+            } else if(cached) { 
+                try { renderInventory(JSON.parse(cached)); } catch(e) {} 
+                callBackend('getAllScooters').then(scooters => {
+                    hideLoader();
+                    if(scooters) {
+                        localStorage.setItem('ev_cache_inventory', JSON.stringify(scooters));
+                        renderInventory(scooters);
+                    }
+                });
+            } else {
+                callBackend('getAllScooters').then(scooters => {
+                    hideLoader();
+                    if(scooters) {
+                        localStorage.setItem('ev_cache_inventory', JSON.stringify(scooters));
+                        renderInventory(scooters);
+                    }
+                });
+            }
+        }
+
+        // --- Returns (Phase 3 Prep) ---
+        let returnData = {};
+        function openReturnModal(bookingId, scooterId) {
+            returnData = { bookingId, scooterId };
+            document.getElementById('return-scooter-id').innerText = `Bike: ${scooterId}`;
+            document.getElementById('returnModal').classList.add('active');
+        }
+
+        function submitReturn() {
+            returnData.condition = document.getElementById('r_condition').value;
+            returnData.lateFee = document.getElementById('r_late').value;
+            returnData.depositRefunded = document.getElementById('r_refund').value;
+            
+            showLoader();
+            callBackend('processReturn', returnData).then(() => {
+                hideLoader();
+                closeModal('returnModal');
+                loadBookings();
+                if(document.getElementById('dashboard').classList.contains('active')) {
+                    loadDashboard();
+                }
+            });
+        }
+
+        // --- Settings ---
+        function loadSettings() {
+            showLoader();
+            callBackend('getSettings').then(s => {
+                hideLoader();
+                if(s) {
+                    document.getElementById('set_sid').value = s.spreadsheetId || '';
+                    document.getElementById('set_email').value = s.reportEmail || '';
+                }
+            });
+        }
+
+        function saveSettings() {
+            showLoader();
+            callBackend('saveSettings', {
+                spreadsheetId: document.getElementById('set_sid').value,
+                reportEmail: document.getElementById('set_email').value
+            }).then(() => { hideLoader(); alert("Settings Saved successfully!"); });
+        }
+
+        function updateDatabaseSheet() {
+            showLoader();
+            callBackend('updateSheet').then(res => {
+                hideLoader();
+                if(res && res.success) {
+                    alert(res.message);
+                    document.getElementById('set_sid').value = res.newId;
+                } else { alert(res ? res.message : "Error"); }
+            });
+        }
+
+        function sendManualReport() {
+            showLoader();
+            callBackend('sendDailyReport').then(res => { hideLoader(); alert(res); });
+        }
+
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        // Theme
+        function toggleTheme() {
+            const el = document.documentElement;
+            const iconPath = document.querySelector('#theme-icon path');
+            if(el.getAttribute('data-theme') === 'dark') {
+                el.removeAttribute('data-theme');
+                localStorage.setItem('ev_theme', 'light');
+                if(iconPath) iconPath.setAttribute('d', 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z');
+            } else {
+                el.setAttribute('data-theme', 'dark');
+                localStorage.setItem('ev_theme', 'dark');
+                if(iconPath) iconPath.setAttribute('d', 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z');
+            }
+        }
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            if(localStorage.getItem('ev_theme') === 'dark') {
+                const iconPath = document.querySelector('#theme-icon path');
+                if(iconPath) iconPath.setAttribute('d', 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z');
+            }
+        });
+    </script>
+</body>
+</html>
