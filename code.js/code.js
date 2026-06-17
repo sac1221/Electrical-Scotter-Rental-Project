@@ -120,7 +120,7 @@ function getAppConfig() {
   const data = settingsSheet.getDataRange().getValues();
   const cottages = [];
   
-  // Assuming column A is Cottages, starting from row 2
+  // Assuming column A is Cottages, starting from row 2: 
   for(let i=1; i<data.length; i++) {
     if(data[i][0]) cottages.push(data[i][0]);
   }
